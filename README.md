@@ -22,3 +22,14 @@ so they don't disappear on us.
 - `ucs-fonts-75dpi100dpi.tar.gz`
 - `ucs-fonts-fixed.tar.gz`
 
+# Usage
+
+- Copy the BDF fonts you want into `./assets`.
+- Experiment with `tryout.py` until you are happy with your choices.
+- Pick the winner and adjust `build.py` so it makes it in `./gen` subdirectory.
+
+# TODO
+
+- add a command line interface
+- combine test and tryout code into single exec
+- add example drawing code
