@@ -1,0 +1,8 @@
+.*.swp
+*.pyc
+*.pyo
+*.bdf
+*.bak
+tmp/
+gen/*
+tmp-font.*
