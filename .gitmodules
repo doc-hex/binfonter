@@ -1,0 +1,4 @@
+[submodule "bdflib_py3"]
+	path = bdflib_py3
+	url = https://github.com/peter-conalgo/bdflib.git
+	branch = py3

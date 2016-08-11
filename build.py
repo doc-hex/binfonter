@@ -297,7 +297,7 @@ def test_generated_code(quick=0):
         
 
 if __name__ == '__main__':
-    if 1:
+    if 0:
         test_generated_code()
 
     if 0:
@@ -305,13 +305,13 @@ if __name__ == '__main__':
         m.encode(open('tmp/fonts.py', 'w'), 'test', is_python=1)
         m.encode(open('tmp/fonts.c', 'w'), 'test', is_python=0)
 
-    if 0:
+    if 1:
         for name in font_files:
             m = Mangler(font_files[name])
             m.encode(open('gen/font_%s.py' % name, 'w'), name, is_python=1)
             m.encode(open('gen/font_%s.h' % name, 'w'), name, is_python=0)
 
-    if 1:
+    if 0:
         # for deeper-embedded C code.
         name = 'fixed'
         m = Mangler(font_files[name], limited_range=range(0, 256))
