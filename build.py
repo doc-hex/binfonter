@@ -190,7 +190,7 @@ try:
     GlyphInfo = namedtuple('GlyphInfo', 'x y w h bits')
 except ImportError:
     # micropython limitation
-    GlyphInfo = tuple
+    GlyphInfo = lambda *x: tuple(x)
 
 def lookup_glyph(cp):
     for r,d in code_points:
