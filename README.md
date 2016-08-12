@@ -30,6 +30,5 @@ so they don't disappear on us.
 
 # TODO
 
-- add a command line interface
 - combine test and tryout code into single exec
 - add example drawing code

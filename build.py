@@ -5,18 +5,20 @@
 #
 # Not using PIL/Pillow for this because their BDF support is not Unicode clean.
 #
-import os, sys
+import os, sys, click
 from pdb import pm
 from array import array
 from bdflib import reader, glyph_combining
 from binascii import b2a_hex, b2a_base64
 
+# TODO: make this configurable.
 font_files = {
     'fixed': 'assets/6x10.bdf',
     'normal': 'assets/helvR08.bdf',
     'bold': 'assets/helvB08.bdf',
     'title': 'assets/helvB10.bdf'
 }
+
 
 # Based on http://code.activestate.com/recipes/496682
 def list2range(lst):
@@ -244,6 +246,11 @@ def wrap_big_lines(lines):
                             for i in lines]
     return out
 
+@click.group()
+def cli():
+    pass
+
+@cli.command('selftest')
 def test_generated_code(quick=0):
     # This is a exhausitive test, which compares the output from the python
     # generated code with the same data from the C code. Uses ctypes, and needs
@@ -294,25 +301,24 @@ def test_generated_code(quick=0):
                 assert (bbox.x, bbox.y, bbox.w, bbox.h) == a[0:4]
                 assert bbox.dlen == len(a[-1])
                 assert bytes(bbox.bits.contents[0:bbox.dlen]) == a[-1]
+
+        print("PASS: %s" % name)
         
 
-if __name__ == '__main__':
-    if 0:
-        test_generated_code()
-
-    if 0:
-        m = Mangler()
-        m.encode(open('tmp/fonts.py', 'w'), 'test', is_python=1)
-        m.encode(open('tmp/fonts.c', 'w'), 'test', is_python=0)
-
-    if 1:
-        for name in font_files:
-            m = Mangler(font_files[name])
+@cli.command('build')
+@click.option('--limited', default=False, help='Limits codepoint range to 0..255')
+@click.option('--py-code/--no-py-code', default=True, help='Make python')
+@click.option('--c-code/--no-c-code', default=False, help='Make C code')
+def build_all(limited, py_code, c_code):
+    rng = range(0,256) if limited else None
+    for name in font_files:
+        m = Mangler(font_files[name], limited_range=rng)
+        if py_code:
             m.encode(open('gen/font_%s.py' % name, 'w'), name, is_python=1)
+        if c_code:
             m.encode(open('gen/font_%s.h' % name, 'w'), name, is_python=0)
 
-    if 0:
-        # for deeper-embedded C code.
-        name = 'fixed'
-        m = Mangler(font_files[name], limited_range=range(0, 256))
-        m.encode(open('gen/font_arm_%s.h' % name, 'w'), name, is_python=0)
+if __name__ == '__main__':
+    cli()
+
+# EOF
