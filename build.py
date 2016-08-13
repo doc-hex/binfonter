@@ -6,10 +6,13 @@
 # Not using PIL/Pillow for this because their BDF support is not Unicode clean.
 #
 import os, sys, click
-from pdb import pm
+from pdb import pm, set_trace
 from array import array
 from bdflib import reader, glyph_combining
 from binascii import b2a_hex, b2a_base64
+
+assert sys.version_info.major == 3
+assert sys.version_info.minor >= 5
 
 # TODO: make this configurable.
 font_files = {
@@ -68,6 +71,37 @@ def allow_gaps(ranges):
             yield a
             yield b
 
+def rotate_90(x, y, w, h, bits, ch):
+    # turn bitmap 90 degrees
+    # - comes in as left-to-right scans, padded into 8-bit or 16-bit words
+    # - as ascii hex, in a list
+    bw = ((w+7)& ~0x7) // 8
+    assert len(bits) == h
+    assert len(bits[0]) == bw*2
+    oh = ((h+7)& ~0x7) // 8
+    assert 1 <= oh <= 4, "too tall after rotation?!?"
+
+    img = [int(i, 16) for i in bits]
+    rv = []
+    for j in range(oh*8):
+        out = 0
+        for i in range(h):
+            mask = 1 << (j%8)
+            out |= 1 if (img[i] & mask) else 0
+            out <<= 1
+        out >>= 1
+
+        assert out <= (1<<oh*8)-1
+        if out == 0:
+            # trim leading zeros
+            x += 1
+        else:
+            rv.append(('%%0%dx' % (oh*2)) % out)
+
+    if ch == 'W': pdb.set_trace()
+
+    #print("%r => %r" % (bits, rv))
+    return x, y, w, h, rv[::-1]
 
 def wrapped_byte_literal(bits):
     # output lines that can work inside a b' ... '
@@ -79,8 +113,9 @@ def wrapped_byte_literal(bits):
 
 
 class Mangler:
-    def __init__(self, fn = 'ucs/100dpi/helvB08.bdf', limited_range=None):
+    def __init__(self, fn = 'ucs/100dpi/helvB08.bdf', limited_range=None, rotate=False):
         self.filename = fn
+        self.rotate = rotate
 
         font = reader.read_bdf(open(fn).__iter__())
 
@@ -93,7 +128,7 @@ class Mangler:
         filler = glyph_combining.FontFiller(font, decompositions)
         filler.add_decomposable_glyphs_to_font()
 
-        print("  Number of codepoints, after comopsitions: %d" % len(font.codepoints()))
+        print("  Number of codepoints, after compositions: %d" % len(font.codepoints()))
 
         too_wide, too_tall = set(), set()
         all_bb = set()
@@ -112,8 +147,12 @@ class Mangler:
                 too_tall.add(cp)
                 continue
 
+            # maybe rotate the data by 90 degrees
+            if self.rotate:
+                x,y, w, h, bits = rotate_90(x, y, w, h, bits, chr(cp))
+
             # trim trailing zeros
-            while bits and bits[-1] == '00':
+            while bits and int(bits[-1], 16) == 0:
                 bits = bits[:-1]
 
             all_bb.add( (x,y,w,h, len(bits)) )
@@ -127,6 +166,7 @@ class Mangler:
 
         print("  %d different shapes" % len(all_bb))
         assert len(all_bb) < 254, "Too many unique sizes/shapes!"
+
 
         self.font = font
         self.data = data
@@ -309,10 +349,11 @@ def test_generated_code(quick=0):
 @click.option('--limited', default=False, help='Limits codepoint range to 0..255')
 @click.option('--py-code/--no-py-code', default=True, help='Make python')
 @click.option('--c-code/--no-c-code', default=False, help='Make C code')
-def build_all(limited, py_code, c_code):
+@click.option('--rotate/--no-rotate', default=False, help='Turn bitmap 90 degrees')
+def build_all(limited, py_code, c_code, rotate):
     rng = range(0,256) if limited else None
     for name in font_files:
-        m = Mangler(font_files[name], limited_range=rng)
+        m = Mangler(font_files[name], limited_range=rng, rotate=rotate)
         if py_code:
             m.encode(open('gen/font_%s.py' % name, 'w'), name, is_python=1)
         if c_code:

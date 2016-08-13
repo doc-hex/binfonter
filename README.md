@@ -28,6 +28,14 @@ so they don't disappear on us.
 - Experiment with `tryout.py` until you are happy with your choices.
 - Pick the winner and adjust `build.py` so it makes it in `./gen` subdirectory.
 
+# Size Limitations
+
+- max width: 16 pixels
+- max height: 32 pixels
+- glyphs that are too big are removed, and shown in a list
+- in most fonts, this include less useful stuff, like: Ǆ ǅ Ǌ Ǳ ǲ ⁇ ₨ ℀ ℁ ℅ ℆ № ℡ ℻ Ⅶ Ⅷ ⅷ ⑴ ⑵ ⑶ ⑷ ⑸ ⑹ ⑺ ⑻ ⑼ ⑽ ⑾ ⑿ ⒀ ⒁ ⒂ ⒃ ⒄ ⒅ ⒆ ⒇ ⒑ ⒒ ⒓ ⒔ ⒕ ⒖ ⒗ ⒘ ⒙ ⒚ ⒛ ⒜ ⒝ ⒞ ⒟ ⒠ ⒢ ⒣ ⒦ ⒨ ⒩ ⒪ ⒫ ⒬ ⒮ ⒰ ⒱ ⒲ ⒴ ⩴ ⩵ ⩶ 🄐 🄑 🄒 🄓 🄔 🄕 🄖 🄗 🄙 🄚 🄛 🄜 🄝 🄞 🄟 🄠 🄡 🄢 🄣 🄤 🄥 🄦 🄧 🄨 🄩
+- total size of all bitmap data must be less than 64k bytes
+
 # TODO
 
 - combine test and tryout code into single exec
