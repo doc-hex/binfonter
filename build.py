@@ -78,27 +78,24 @@ def rotate_90(x, y, w, h, bits, ch):
     bw = ((w+7)& ~0x7) // 8
     assert len(bits) == h
     assert len(bits[0]) == bw*2
+    ow = ((w+7)& ~0x7) // 8
     oh = ((h+7)& ~0x7) // 8
-    assert 1 <= oh <= 4, "too tall after rotation?!?"
+    assert 1 <= ow <= 4, "too tall after rotation?!?"
 
     img = [int(i, 16) for i in bits]
     rv = []
-    for j in range(oh*8):
+    for j in range(ow*8):
         out = 0
         for i in range(h):
-            mask = 1 << (j%8)
+            mask = 1 << j
             out |= 1 if (img[i] & mask) else 0
             out <<= 1
         out >>= 1
 
         assert out <= (1<<oh*8)-1
-        if out == 0:
-            # trim leading zeros
-            x += 1
-        else:
-            rv.append(('%%0%dx' % (oh*2)) % out)
+        rv.append(('%%0%dx' % (oh*2)) % out)
 
-    if ch == 'W': pdb.set_trace()
+    #if ch == 'W': set_trace()
 
     #print("%r => %r" % (bits, rv))
     return x, y, w, h, rv[::-1]
@@ -186,8 +183,6 @@ class Mangler:
         bitmaps = bytearray([0xAA])       # first value not usable
         
         for cp in range(max_cp):
-
-            x, y = (cp >> 8), (cp & 0xff)
             if cp in self.omit or cp not in self.data:
                 # char is undefined / or omitted
                 #codept_map.append(0)
