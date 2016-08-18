@@ -16,10 +16,10 @@ assert sys.version_info.minor >= 5
 
 # TODO: make this configurable.
 font_files = {
-    'fixed': 'assets/6x10.bdf',
+#    'fixed': 'assets/6x10.bdf',        # BUGS
     'normal': 'assets/helvR08.bdf',
     'bold': 'assets/helvB08.bdf',
-    'title': 'assets/helvB10.bdf'
+#    'title': 'assets/helvB10.bdf'      # BUGS
 }
 
 
@@ -95,7 +95,7 @@ def rotate_90(x, y, w, h, bits, ch):
         assert out <= (1<<oh*8)-1
         rv.append(('%%0%dx' % (oh*2)) % out)
 
-    #if ch == 'W': set_trace()
+    #if ch == 'H': set_trace()
 
     #print("%r => %r" % (bits, rv))
     return x, y, w, h, rv[::-1]
@@ -103,7 +103,7 @@ def rotate_90(x, y, w, h, bits, ch):
 def wrapped_byte_literal(bits):
     # output lines that can work inside a b' ... '
     
-    w = 20
+    w = 18
     for i in range(0, len(bits), w):
         h = bits[i:i+w]
         yield ''.join('\\x%02x' % i for i in h) + '\\'
@@ -170,7 +170,7 @@ class Mangler:
         self.all_bb = list(sorted(all_bb))
         self.omit = set.union(too_wide, too_tall)
 
-    def encode(self, fd, prefix, is_python=1):
+    def encode(self, prefix, is_python=1):
         #  output 3 arrays:
         # - map of tightly encoded set of possible BBox and data lengths
         # - map codepoint => raw data
@@ -201,47 +201,26 @@ class Mangler:
         if is_python:
             rv = []
             rv.append('# Auto-generated. Dont edit')
-            rv.append('# PREFIX = %s' % prefix)
             rv.append('')
-            rv.append('class info:')
-            rv.append('    max_code_point = %d' % max_cp)
+            rv.append('class Font%s(FontBase):' % prefix.title())
+            #rv.append('    max_code_point = %d' % max(codpt_map.keys())
+            rv.append('    code_points = range(%d, %d)' 
+                                % (min(codept_map.keys()), max(codept_map.keys())))
             rv.append('')
-            rv.append('bboxes = %r' % bboxes)
+            rv.append('    bboxes = %r' % bboxes)
             rv.append('')
-            rv.append('code_points = [\\')
+            rv.append('    code_points = [')
             for rng in allow_gaps(list2range(codept_map.keys())):
                 rv.append('(range(%d, %d), [%s]), ' % (rng.start, rng.stop,
                         ', '.join(str(codept_map.get(i, 0)) for i in rng)))
-            rv.append(']')
+            rv.append('    ]')
             rv.append('')
 
             out = wrap_big_lines(rv)
 
-            out.append('bitmaps = b"""\\')
+            out.append('    bitmaps = b"""\\')
             out.extend(wrapped_byte_literal(bitmaps))
             out.append('"""')
-
-            out.append("""
-try:
-    from collections import namedtuple
-    GlyphInfo = namedtuple('GlyphInfo', 'x y w h bits')
-except ImportError:
-    # micropython limitation
-    GlyphInfo = lambda *x: tuple(x)
-
-def lookup_glyph(cp):
-    for r,d in code_points:
-        if cp not in r: continue
-        ptr = d[cp-r.start]
-        if not ptr: return None
-
-        x,y, w,h, dlen = bboxes[bitmaps[ptr]]
-        bits = bitmaps[ptr+1:ptr+1+dlen]
-
-        return GlyphInfo(x,y, w,h, bits)
-
-    return None
-""")
 
         if not is_python:
             # output C Code
@@ -272,7 +251,7 @@ def lookup_glyph(cp):
             out.append(tmpl.substitute(BOXES=c_boxes, RANGES=c_ranges, BITS=c_bits, PREFIX=prefix))
 
     
-        print('\n'.join(out), file=fd)
+        return out
 
 def wrap_big_lines(lines):
     from textwrap import fill
@@ -341,18 +320,47 @@ def test_generated_code(quick=0):
         
 
 @cli.command('build')
-@click.option('--limited', default=False, help='Limits codepoint range to 0..255')
+@click.option('--charset', default='7tech', type=click.Choice(['8bit', '7tech', 'all']),
+                                     help='Limit codepoints encoded')
 @click.option('--py-code/--no-py-code', default=True, help='Make python')
 @click.option('--c-code/--no-c-code', default=False, help='Make C code')
 @click.option('--rotate/--no-rotate', default=False, help='Turn bitmap 90 degrees')
-def build_all(limited, py_code, c_code, rotate):
-    rng = range(0,256) if limited else None
+def build_all(charset, py_code, c_code, rotate):
+    if charset is 'all':
+        rng = None
+    elif charset == '8bit':
+        rng = range(0,256)
+    elif charset == '7tech':
+        rng = frozenset(list(range(32,127)) + [ord(i) for i in '±×∞≤≥⋅㎐㎑㎑㎒㎒㎓㎔µ'])
+
+    assert py_code or c_code
+    assert not (py_code and c_code)
+
+    lines = []
+    if py_code:
+        lines.append("# autogen'ed. don't edit")
+        lines.append("#")
+        for name, fname in font_files.items():
+            lines.append("#   Font%s <= %s" % (name.title(), fname))
+        lines.append("#")
+        lines.append("__all__ = [%s]" % ', '.join('"Font%s"' % i.title() for i in font_files))
+        lines.append(open('template.py').read())
+ 
     for name in font_files:
         m = Mangler(font_files[name], limited_range=rng, rotate=rotate)
         if py_code:
-            m.encode(open('gen/font_%s.py' % name, 'w'), name, is_python=1)
+            lines.extend(m.encode(name, is_python=1))
+
         if c_code:
-            m.encode(open('gen/font_%s.h' % name, 'w'), name, is_python=0)
+            lines.extend(m.encode(name, is_python=0))
+
+    if py_code:
+        with open('gen/fonts.py', 'w') as fd:
+            print('\n'.join(lines), file=fd)
+
+    if c_code:
+        with open('gen/fonts.c', 'w') as fd:
+            print('\n'.join(lines), file=fd)
 
 if __name__ == '__main__':
     cli()
