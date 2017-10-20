@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 from PIL import Image, ImageDraw, ImageFont
-import io
+import io, os, sys
 
 # Decoder:
 #   timR08 = Times R=regular 08=8 points, which depends on dpi
@@ -69,4 +69,4 @@ def doit_TTF(fn = 'something.ttf', sz=18):
     tmp.show()
 
 if __name__ == '__main__':
-    doit()
+    doit(sys.argv[1])       # need BDF on cmd line

@@ -14,13 +14,16 @@ from binascii import b2a_hex, b2a_base64
 assert sys.version_info.major == 3
 assert sys.version_info.minor >= 5
 
-# TODO: make this configurable.
-font_files = {
-#    'fixed': 'assets/6x10.bdf',        # BUGS
-    'normal': 'assets/helvR08.bdf',
-    'bold': 'assets/helvB08.bdf',
-#    'title': 'assets/helvB10.bdf'      # BUGS
-}
+# TODO: make a true config file, or something
+try:
+    from config import font_files
+except ImportError:
+    font_files = {
+    #    'fixed': 'assets/6x10.bdf',        # BUGS
+        'normal': 'assets/helvR08.bdf',
+        'bold': 'assets/helvB08.bdf',
+    #    'title': 'assets/helvB10.bdf'      # BUGS
+    }
 
 
 # Based on http://code.activestate.com/recipes/496682
@@ -111,13 +114,13 @@ def wrapped_byte_literal(bits):
 
 
 class Mangler:
-    def __init__(self, fn = 'ucs/100dpi/helvB08.bdf', limited_range=None, rotate=False):
+    def __init__(self, fn = 'ucs/100dpi/helvB08.bdf', output_name='font', limited_range=None, rotate=False):
         self.filename = fn
         self.rotate = rotate
 
         font = reader.read_bdf(open(fn).__iter__())
 
-        print("For font: %s" % fn)
+        print("For font: %s ... called '%s' in output" % (fn, output_name))
         if limited_range:
             print("  Restricted to: %d chars (%d max)" % (len(limited_range), max(limited_range)))
         print("  Number of codepoints: %d" % len(font.codepoints()))
@@ -212,7 +215,7 @@ class Mangler:
             rv.append('')
             rv.append('class Font%s(FontBase):' % prefix.title())
             #rv.append('    max_code_point = %d' % max(codpt_map.keys())
-            rv.append('    code_points = range(%d, %d)' 
+            rv.append('    code_range = range(%d, %d)' 
                                 % (min(codept_map.keys()), max(codept_map.keys())))
             rv.append('')
             rv.append('    bboxes = %r' % bboxes)
@@ -255,8 +258,7 @@ class Mangler:
 
             c_bits = '\n\t'.join(wrap_big_lines([', '.join(str(i) for i in bitmaps)]))
 
-            out = []
-            out.append(tmpl.substitute(BOXES=c_boxes, RANGES=c_ranges, BITS=c_bits, PREFIX=prefix))
+            out = [tmpl.substitute(BOXES=c_boxes, RANGES=c_ranges, BITS=c_bits, PREFIX=prefix)]
 
     
         return out
@@ -272,34 +274,19 @@ def wrap_big_lines(lines):
 def cli():
     pass
 
-@cli.command('selftest')
-def test_generated_code(quick=0):
+def test_generated_code(names, py_out, c_out):
     # This is a exhausitive test, which compares the output from the python
     # generated code with the same data from the C code. Uses ctypes, and needs
     # a working GCC in the path.
     #
-    # run with:
-    #       python3 -m pytest ./build.py
     #
     import os, ctypes
 
-    if not os.path.isdir('tmp'):
-        os.mkdir('tmp')
-
-    # Generate files, C and Python
-    if not quick:
-        for name, fn in font_files.items():
-            m = Mangler(fn)
-            m.encode(open('tmp/%s.py' % name, 'w'), 'unused', is_python=1)
-            m.encode(open('tmp/fonts.c', 'w'), 'test', is_python=0)
-            r = os.system(
-                "(cd tmp; gcc -c -D INCL_C_SOURCE fonts.c; gcc -shared -o c_%s.so fonts.o)" % name)
-            assert not r
+    # compile the C
+    r = os.system("gcc -D INCL_C_SOURCE %s -shared -o font-test.so" % c_out)
+    assert not r, "C compiler failed; look for messages"
 
     # Compare them both
-
-    sys.path.insert(0, 'tmp')
-
     from ctypes import c_ubyte, c_void_p, c_byte, byref, POINTER
     class bboxInfo_t(ctypes.Structure):
         _fields_ = [ 
@@ -307,16 +294,20 @@ def test_generated_code(quick=0):
                 ("w", c_byte), ("h", c_byte), 
                 ("dlen", c_ubyte), ("bits", POINTER(c_ubyte * 32)) ]
 
-    for name in font_files:
-        clib = ctypes.cdll.LoadLibrary('tmp/c_%s.so' % name)
-        assert clib
-        py = __import__('%s' % name)
+    clib = ctypes.cdll.LoadLibrary('font-test.so')
+    assert clib
 
-        for cp in range(py.info.max_code_point):
-            a = py.lookup_glyph(cp)
+    import importlib.machinery
+    mod = importlib.machinery.SourceFileLoader('mod', py_out).load_module()
+
+    for name in names:
+        py = getattr(mod, 'Font'+name.title())
+
+        for cp in py.code_range:
+            a = py.lookup(cp)
 
             bbox = bboxInfo_t()
-            rv = clib.test_lookup_glyph(cp, byref(bbox))
+            rv = getattr(clib, name+'_lookup_glyph')(cp, byref(bbox))
 
             assert (a == None) == (rv == 1)
             if a:
@@ -324,7 +315,7 @@ def test_generated_code(quick=0):
                 assert bbox.dlen == len(a[-1])
                 assert bytes(bbox.bits.contents[0:bbox.dlen]) == a[-1]
 
-        print("PASS: %s" % name)
+        print("Selftest PASS: %s" % name)
 
 # useful "technical" characters
 USEFUL_TECH = \
@@ -335,9 +326,12 @@ USEFUL_TECH = \
 @click.option('--charset', default='7tech', type=click.Choice(['8bit', '7tech', 'all']),
                                      help='Limit codepoints encoded')
 @click.option('--py-code/--no-py-code', default=True, help='Make python')
-@click.option('--c-code/--no-c-code', default=False, help='Make C code')
-@click.option('--rotate/--no-rotate', default=False, help='Turn bitmap 90 degrees')
-def build_all(charset, py_code, c_code, rotate):
+@click.option('--c-code/--no-c-code', default=True, help='Make C code')
+@click.option('--rotate/--no-rotate', default=True, help='Turn bitmap 90 degrees')
+@click.option('--py-out', default='gen/fonts.py', help='Output file for python code')
+@click.option('--c-out', default='gen/fonts.c', help='Output file for C code')
+@click.option('--selftest', is_flag=True, help='Compile C and compare to python outputs')
+def build_all(charset, py_code, c_code, rotate, py_out, c_out, selftest=False):
     if charset is 'all':
         rng = None
     elif charset == '8bit':
@@ -346,10 +340,13 @@ def build_all(charset, py_code, c_code, rotate):
         rng = frozenset(list(range(32,127)) + [ord(i) for i in USEFUL_TECH if i != ' '])
 
     assert py_code or c_code
-    assert not (py_code and c_code)
 
-    lines = []
+    fonts = {}
+    for name in font_files:
+        fonts[name] = Mangler(font_files[name], name, limited_range=rng, rotate=rotate)
+
     if py_code:
+        lines = []
         lines.append("# autogen'ed. don't edit")
         lines.append("#")
         lines.append("#")
@@ -362,21 +359,26 @@ def build_all(charset, py_code, c_code, rotate):
         lines.append("__all__ = [%s]" % ', '.join('"Font%s"' % i.title() for i in font_files))
         lines.append(open('template.py').read())
  
-    for name in font_files:
-        m = Mangler(font_files[name], limited_range=rng, rotate=rotate)
-        if py_code:
-            lines.extend(m.encode(name, is_python=1))
+        for name in font_files:
+            lines.extend(fonts[name].encode(name, is_python=1))
 
-        if c_code:
-            lines.extend(m.encode(name, is_python=0))
-
-    if py_code:
-        with open('gen/fonts.py', 'w') as fd:
-            print('\n'.join(lines), file=fd)
+        with open(py_out, 'wt') as fd:
+            fd.write('\n'.join(lines))
 
     if c_code:
-        with open('gen/fonts.c', 'w') as fd:
-            print('\n'.join(lines), file=fd)
+
+        lines = []
+
+        for name in font_files:
+            lines.extend(fonts[name].encode(name, is_python=0))
+
+        with open(c_out, 'wt') as fd:
+            fd.write(open('template-prefix.h').read())
+            fd.write('\n'.join(lines))
+
+    if selftest:
+        assert py_code and c_code
+        test_generated_code(font_files.keys(), py_out, c_out)
 
 if __name__ == '__main__':
     cli()

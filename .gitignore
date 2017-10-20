@@ -8,3 +8,8 @@ tmp-font.*
 ENV
 example.png
 *.bdf
+.DS_Store
+font-test.so
+
+# write your own version of this:
+config.py
