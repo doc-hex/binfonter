@@ -33,10 +33,21 @@ so they don't disappear on us.
 - max width: 16 pixels
 - max height: 32 pixels
 - glyphs that are too big are removed, and shown in a list
-- in most fonts, this include less useful stuff, like: Ǆ ǅ Ǌ Ǳ ǲ ⁇ ₨ ℀ ℁ ℅ ℆ № ℡ ℻ Ⅶ Ⅷ ⅷ ⑴ ⑵ ⑶ ⑷ ⑸ ⑹ ⑺ ⑻ ⑼ ⑽ ⑾ ⑿ ⒀ ⒁ ⒂ ⒃ ⒄ ⒅ ⒆ ⒇ ⒑ ⒒ ⒓ ⒔ ⒕ ⒖ ⒗ ⒘ ⒙ ⒚ ⒛ ⒜ ⒝ ⒞ ⒟ ⒠ ⒢ ⒣ ⒦ ⒨ ⒩ ⒪ ⒫ ⒬ ⒮ ⒰ ⒱ ⒲ ⒴ ⩴ ⩵ ⩶ 🄐 🄑 🄒 🄓 🄔 🄕 🄖 🄗 🄙 🄚 🄛 🄜 🄝 🄞 🄟 🄠 🄡 🄢 🄣 🄤 🄥 🄦 🄧 🄨 🄩
-- total size of all bitmap data must be less than 64k bytes
+- in most fonts, that is less useful stuff, like: Ǆ ǅ Ǌ Ǳ ǲ ⁇ ₨ ℀ ℁ ℅ ℆ № ℡ ℻ Ⅶ Ⅷ ⅷ ⑴ ⑵ ⑶ ⑷ ⑸ ⑹ ⑺ ⑻ ⑼ ⑽ ⑾ ⑿ ⒀ ⒁ ⒂ ⒃ ⒄ ⒅ ⒆ ⒇ ⒑ ⒒ ⒓ ⒔ ⒕ ⒖ ⒗ ⒘ ⒙ ⒚ ⒛ ⒜ ⒝ ⒞ ⒟ ⒠ ⒢ ⒣ ⒦ ⒨ ⒩ ⒪ ⒫ ⒬ ⒮ ⒰ ⒱ ⒲ ⒴ ⩴ ⩵ ⩶ 🄐 🄑 🄒 🄓 🄔 🄕 🄖 🄗 🄙 🄚 🄛 🄜 🄝 🄞 🄟 🄠 🄡 🄢 🄣 🄤 🄥 🄦 🄧 🄨 🄩
+- total size of all bitmap data must be less than 64k bytes (easy)
+
+# Other BDF Fonts
+
+- [Powerline Terminus](https://github.com/powerline/fonts/tree/master/Terminus/BDF)
+- [Creep](https://github.com/romeovs/creep/releases)
+
+- Large collection, with samples: [Tecate](https://github.com/Tecate/bitmap-fonts)
+- [Zevv-pepp](http://zevv.nl/play/code/zevv-peep/)
+- [plan9 collection](https://github.com/rtrn/plan9fonts)
 
 # TODO
 
 - combine test and tryout code into single exec
 - add example drawing code
+
+

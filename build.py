@@ -96,6 +96,7 @@ def rotate_90(x, y, w, h, bits, ch):
         rv.append(('%%0%dx' % (oh*2)) % out)
 
     #if ch == 'H': set_trace()
+    if ch == chr(9650): set_trace()
 
     #print("%r => %r" % (bits, rv))
     return x, y, w, h, rv[::-1]
@@ -118,7 +119,7 @@ class Mangler:
 
         print("For font: %s" % fn)
         if limited_range:
-            print("  Restricted to: %d chars" % len(limited_range))
+            print("  Restricted to: %d chars (%d max)" % (len(limited_range), max(limited_range)))
         print("  Number of codepoints: %d" % len(font.codepoints()))
 
         decompositions = glyph_combining.build_unicode_decompositions()
@@ -129,10 +130,12 @@ class Mangler:
 
         too_wide, too_tall = set(), set()
         all_bb = set()
+        missing = set()
         data = {}
 
         for cp in font.codepoints():
-            if limited_range and cp not in limited_range: continue
+            if limited_range and cp not in limited_range: 
+                continue
 
             gy = font[cp]
             x,y,w,h = gy.get_bounding_box()
@@ -154,6 +157,11 @@ class Mangler:
 
             all_bb.add( (x,y,w,h, len(bits)) )
             data[cp] = (x,y,w,h, bits)
+
+        if limited_range:
+            missing = set(limited_range) - set(data.keys())
+            if missing:
+                print('  Missing but expected: ' + '  '.join(chr(i) for i in missing))
 
         print('  %s are too wide: %s' % (len(too_wide),
                                                 ' '.join(chr(i) for i in sorted(too_wide))))
@@ -317,6 +325,10 @@ def test_generated_code(quick=0):
                 assert bytes(bbox.bits.contents[0:bbox.dlen]) == a[-1]
 
         print("PASS: %s" % name)
+
+# useful "technical" characters
+USEFUL_TECH = \
+ ' ± × ∞ ≤ ≥ ⋅ ㎐ ㎑ ㎑ ㎒ ㎒ ㎓ ㎔ µ → ➡︎ ← ⬅︎ ↑ ⬆︎ ↓ ⬇︎ ↔︎ ⬌ ↕︎ ⬍ ↩︎ ▶︎ ◀︎ ▼ ▲ '
         
 
 @cli.command('build')
@@ -331,7 +343,7 @@ def build_all(charset, py_code, c_code, rotate):
     elif charset == '8bit':
         rng = range(0,256)
     elif charset == '7tech':
-        rng = frozenset(list(range(32,127)) + [ord(i) for i in '±×∞≤≥⋅㎐㎑㎑㎒㎒㎓㎔µ'])
+        rng = frozenset(list(range(32,127)) + [ord(i) for i in USEFUL_TECH if i != ' '])
 
     assert py_code or c_code
     assert not (py_code and c_code)
@@ -340,8 +352,12 @@ def build_all(charset, py_code, c_code, rotate):
     if py_code:
         lines.append("# autogen'ed. don't edit")
         lines.append("#")
+        lines.append("#")
+        if len(rng) < 200:
+            lines.append("# special chars: %s" % '  '.join(chr(i) for i in rng if i > 128))
+            lines.append("#")
         for name, fname in font_files.items():
-            lines.append("#   Font%s <= %s" % (name.title(), fname))
+            lines.append("#   '%s' => Font%s" % (fname, name.title()))
         lines.append("#")
         lines.append("__all__ = [%s]" % ', '.join('"Font%s"' % i.title() for i in font_files))
         lines.append(open('template.py').read())

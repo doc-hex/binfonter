@@ -1,8 +1,10 @@
 .*.swp
 *.pyc
 *.pyo
-*.bdf
 *.bak
 tmp/
 gen/*
 tmp-font.*
+ENV
+example.png
+*.bdf
