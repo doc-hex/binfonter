@@ -46,6 +46,9 @@ def list2range(lst):
     # last range
     yield currentrange
 
+def revbyte(n):
+    return int('{:08b}'.format(n)[::-1], 2)
+
 def allow_gaps(ranges):
     """
         Merge ranges provided by an iterator so that smaller ranges are
@@ -74,7 +77,7 @@ def allow_gaps(ranges):
             yield a
             yield b
 
-def rotate_90(x, y, w, h, bits, ch):
+def rotate_90_OLD(x, y, w, h, bits, ch):
     # turn bitmap 90 degrees
     # - comes in as left-to-right scans, padded into 8-bit or 16-bit words
     # - as ascii hex, in a list
@@ -86,6 +89,7 @@ def rotate_90(x, y, w, h, bits, ch):
     assert 1 <= ow <= 4, "too tall after rotation?!?"
 
     img = [int(i, 16) for i in bits]
+        
     rv = []
     for j in range(ow*8):
         out = 0
@@ -98,11 +102,77 @@ def rotate_90(x, y, w, h, bits, ch):
         assert out <= (1<<oh*8)-1
         rv.append(('%%0%dx' % (oh*2)) % out)
 
-    #if ch == 'H': set_trace()
-    if ch == chr(9650): set_trace()
+    # for debug... handy!
+    if ch == 'H': 
+        #set_trace()
+        from PIL import Image
+        from binascii import a2b_hex
+        preview = Image.frombytes('1', (w, h), bytes(img), decoder_name='raw')
+        preview.show()
+        out = a2b_hex(''.join(rv[::-1]))
+        p2 = Image.frombytes('1', (h, w), out, decoder_name='raw')
+        p2.show()
+        set_trace()
+        
+    #if ch == chr(9650): set_trace()
 
     #print("%r => %r" % (bits, rv))
-    return x, y, w, h, rv[::-1]
+    return x, y, h, w, rv[::-1]
+
+def rotate_90(x, y, w, h, bits, ch):
+    # turn bitmap 90 degrees
+    # - LAZY method, using Pillow
+    # - comes in as left-to-right scans, padded into 8-bit or 16-bit words
+    # - as ascii hex, in a list
+    from PIL import Image
+    from binascii import a2b_hex, b2a_hex
+
+    bw = ((w+7)& ~0x7) // 8
+    assert len(bits) == h
+    assert len(bits[0]) == bw*2
+    ow = ((w+7)& ~0x7) // 8
+    oh = ((h+7)& ~0x7) // 8
+    assert 1 <= ow <= 4, "too tall after rotation?!?"
+
+    img = a2b_hex(''.join(bits))
+    before = Image.frombytes('1', (w, h), bytes(img), decoder_name='raw')
+
+    after = before.rotate(90, expand=True)
+    assert after.size == (h, w)
+
+    # not sure why I need these, but I do.
+    after = after.transpose(Image.FLIP_LEFT_RIGHT)
+    after = after.transpose(Image.FLIP_TOP_BOTTOM)
+
+    w,h = h,w
+
+    a = after.tobytes()
+    if w <= 8:
+        rv = b2a_hex(a)
+    elif w <= 16:
+        if len(a) % 2 == 1: a += b'\0'
+        rv = ['%02x%02x'%(a[i*2], a[(i*2)+1]) for i in range(len(a)//2)]
+    elif w <= 24:
+        while len(a) % 3 != 0:
+            a += b'\0'
+        rv = ['%02x%02x%02x'%(a[i*3], a[(i*3)+1], a[(i*3)+2]) for i in range(len(a)//3)]
+    else:
+        # not expected
+        raise ValueError("too wide?")
+
+    if ch == 'H':
+        #before.show()
+        after.show()
+
+        print("RV: %d,%d (%dx%d): %s" % (x,y,w,h,rv))
+
+        #set_trace()
+
+    # trailing blanks will be removed in next step, but at
+    # this point ...
+    assert len(rv) == h
+
+    return x,y, w, h, rv
 
 def wrapped_byte_literal(bits):
     # output lines that can work inside a b' ... '
@@ -143,20 +213,24 @@ class Mangler:
             gy = font[cp]
             x,y,w,h = gy.get_bounding_box()
             bits = gy.get_data()
-            if w > 16:
+
+            # maybe rotate the data by 90 degrees
+            if self.rotate:
+                x,y, w, h, bits = rotate_90(x, y, w, h, bits, chr(cp))
+
+            if w > 32:
                 too_wide.add(cp)
                 continue
             if h > 32:
                 too_tall.add(cp)
                 continue
 
-            # maybe rotate the data by 90 degrees
-            if self.rotate:
-                x,y, w, h, bits = rotate_90(x, y, w, h, bits, chr(cp))
-
-            # trim trailing zeros
+            # trim trailing zeros (full scanrow)
             while bits and int(bits[-1], 16) == 0:
                 bits = bits[:-1]
+
+            # convert to binary from hex
+            bits = bytes.fromhex(''.join(bits))
 
             all_bb.add( (x,y,w,h, len(bits)) )
             data[cp] = (x,y,w,h, bits)
@@ -204,10 +278,9 @@ class Mangler:
                 assert idx >= 1
                 codept_map[cp] = len(bitmaps)
                 bitmaps.append(idx)
-                bitmaps += bytes.fromhex(''.join(d))
+                bitmaps += d
 
         assert len(bitmaps) < 65534, "Font too big"
-        print("  %d bytes for bitmaps data" % len(bitmaps))
 
         if is_python:
             rv = []
@@ -237,6 +310,8 @@ class Mangler:
             # output C Code
             from string import Template
             tmpl = Template(open('template.h').read())
+
+            print("  %d bytes for bitmaps data" % len(bitmaps))
 
             c_boxes = '\n\t'.join('{ %d,%d, %d,%d, %d },' % j for j in bboxes if j)[:-1]
 
@@ -327,11 +402,11 @@ USEFUL_TECH = \
                                      help='Limit codepoints encoded')
 @click.option('--py-code/--no-py-code', default=True, help='Make python')
 @click.option('--c-code/--no-c-code', default=True, help='Make C code')
-@click.option('--rotate/--no-rotate', default=True, help='Turn bitmap 90 degrees')
+@click.option('--rotate/--no-rotate', default=False, help='Turn bitmap 90 degrees')
 @click.option('--py-out', default='gen/fonts.py', help='Output file for python code')
 @click.option('--c-out', default='gen/fonts.c', help='Output file for C code')
 @click.option('--selftest', is_flag=True, help='Compile C and compare to python outputs')
-def build_all(charset, py_code, c_code, rotate, py_out, c_out, selftest=False):
+def build_all(charset, py_code, c_code, rotate, py_out, c_out, selftest=0):
     if charset is 'all':
         rng = None
     elif charset == '8bit':
