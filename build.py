@@ -424,6 +424,7 @@ def build_all(charset, py_code, c_code, rotate, py_out, c_out, selftest=0):
         lines = []
         lines.append("# autogen'ed. don't edit")
         lines.append("#")
+        lines.append("# cmdline: " + ' '.join(sys.argv))
         lines.append("#")
         if len(rng) < 200:
             lines.append("# special chars: %s" % '  '.join(chr(i) for i in rng if i > 128))
