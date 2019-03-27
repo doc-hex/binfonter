@@ -45,6 +45,10 @@ so they don't disappear on us.
 - [Zevv-pepp](http://zevv.nl/play/code/zevv-peep/)
 - [plan9 collection](https://github.com/rtrn/plan9fonts)
 
+# Useful Tools
+
+- [gbdfed](https://www.math.nmsu.edu/~mleisher/Software/gbdfed/) is available on Brew
+
 # TODO
 
 - combine test and tryout code into single exec

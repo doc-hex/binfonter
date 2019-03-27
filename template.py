@@ -1,15 +1,11 @@
 
 
 try:
-    try:
-        from collections import namedtuple
-    except ImportError:
-        from ucollections import namedtuple
-
-    GlyphInfo = namedtuple('GlyphInfo', 'x y w h bits')
+    from ucollections import namedtuple
 except ImportError:
-    # old micropython limitation
-    GlyphInfo = lambda *x: tuple(x)
+    from collections import namedtuple
+
+GlyphInfo = namedtuple('GlyphInfo', 'x y w h bits')
 
 class FontBase:
 

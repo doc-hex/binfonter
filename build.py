@@ -282,12 +282,15 @@ class Mangler:
 
         assert len(bitmaps) < 65534, "Font too big"
 
+        typical_height = max(i[3] for i in bboxes if i)
+
         if is_python:
             rv = []
             rv.append('# Auto-generated. Dont edit')
             rv.append('')
             rv.append('class Font%s(FontBase):' % prefix.title())
             #rv.append('    max_code_point = %d' % max(codpt_map.keys())
+            rv.append('    height = %d' % typical_height)        # average?
             rv.append('    code_range = range(%d, %d)' 
                                 % (min(codept_map.keys()), max(codept_map.keys())))
             rv.append('')
@@ -295,8 +298,13 @@ class Mangler:
             rv.append('')
             rv.append('    code_points = [')
             for rng in allow_gaps(list2range(codept_map.keys())):
-                rv.append('(range(%d, %d), [%s]), ' % (rng.start, rng.stop,
-                        ', '.join(str(codept_map.get(i, 0)) for i in rng)))
+                hh = '(range(%d, %d), [%s]),' % (rng.start, rng.stop,
+                        ', '.join(str(codept_map.get(i, 0)) for i in rng))
+
+                if rng.start >= 128:
+                    hh += '  # ' + ' '.join(chr(i) for i in rng if codept_map.get(i, 0))
+
+                rv.append(hh)
             rv.append('    ]')
             rv.append('')
 
@@ -395,10 +403,13 @@ def test_generated_code(names, py_out, c_out):
 # useful "technical" characters
 USEFUL_TECH = \
  ' ± × ∞ ≤ ≥ ⋅ ㎐ ㎑ ㎑ ㎒ ㎒ ㎓ ㎔ µ → ➡︎ ← ⬅︎ ↑ ⬆︎ ↓ ⬇︎ ↔︎ ⬌ ↕︎ ⬍ ↩︎ ▶︎ ◀︎ ▼ ▲ '
+
+# minimal tech chars
+MINIMAL_TECH = ' µ ± × \u221a'
         
 
 @cli.command('build')
-@click.option('--charset', default='7tech', type=click.Choice(['8bit', '7tech', 'all']),
+@click.option('--charset', default='7min', type=click.Choice(['8bit', '7tech', '7min', 'all']),
                                      help='Limit codepoints encoded')
 @click.option('--py-code/--no-py-code', default=True, help='Make python')
 @click.option('--c-code/--no-c-code', default=True, help='Make C code')
@@ -407,12 +418,14 @@ USEFUL_TECH = \
 @click.option('--c-out', default='gen/fonts.c', help='Output file for C code')
 @click.option('--selftest', is_flag=True, help='Compile C and compare to python outputs')
 def build_all(charset, py_code, c_code, rotate, py_out, c_out, selftest=0):
-    if charset is 'all':
+    if charset == 'all':
         rng = None
     elif charset == '8bit':
         rng = range(0,256)
     elif charset == '7tech':
         rng = frozenset(list(range(32,127)) + [ord(i) for i in USEFUL_TECH if i != ' '])
+    elif charset == '7min':
+        rng = frozenset(list(range(32,127)) + [ord(i) for i in MINIMAL_TECH if i != ' '])
 
     assert py_code or c_code
 
@@ -426,8 +439,9 @@ def build_all(charset, py_code, c_code, rotate, py_out, c_out, selftest=0):
         lines.append("#")
         lines.append("# cmdline: " + ' '.join(sys.argv))
         lines.append("#")
-        if len(rng) < 200:
-            lines.append("# special chars: %s" % '  '.join(chr(i) for i in rng if i > 128))
+        if rng and len(rng) < 200:
+            lines.append("# special chars (if present):")
+            lines.append("#  %s" % '  '.join(chr(i) for i in rng if i > 128))
             lines.append("#")
         for name, fname in font_files.items():
             lines.append("#   '%s' => Font%s" % (fname, name.title()))
