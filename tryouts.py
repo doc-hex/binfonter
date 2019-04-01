@@ -44,6 +44,7 @@ def doit(fn = 'assets/zevv-peep-iso8859-15-10x20.bdf', screen_size=(128, 32)):
 
     tmp = tmp.convert('1')
     tmp.save('example.png')
+    print("Wrote:  example.png")
     #tmp.show()
 
 def doit_TTF(fn = 'something.ttf', sz=18):
