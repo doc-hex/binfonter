@@ -453,7 +453,7 @@ def build_all(charset, py_code, c_code, rotate, py_out, c_out, selftest=0):
             lines.extend(fonts[name].encode(name, is_python=1))
 
         with open(py_out, 'wt') as fd:
-            fd.write('\n'.join(lines))
+            fd.write('\n'.join(lines) + '\n')
 
     if c_code:
 

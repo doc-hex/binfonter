@@ -1,5 +1,4 @@
 
-
 try:
     from ucollections import namedtuple
 except ImportError:
