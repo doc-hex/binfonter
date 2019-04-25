@@ -256,7 +256,7 @@ class Mangler:
         self.all_bb = list(sorted(all_bb))
         self.omit = set.union(too_wide, too_tall)
 
-    def encode(self, prefix, is_python=1):
+    def encode(self, prefix, is_python=1, portable=0):
         #  output 3 arrays:
         # - map of tightly encoded set of possible BBox and data lengths
         # - map codepoint => raw data
@@ -287,17 +287,19 @@ class Mangler:
 
         if is_python:
             rv = []
-            rv.append('# Auto-generated. Dont edit')
-            rv.append('')
             rv.append('class Font%s(FontBase):' % prefix.title())
             #rv.append('    max_code_point = %d' % max(codpt_map.keys())
             rv.append('    height = %d' % typical_height)        # average?
             rv.append('    code_range = range(%d, %d)' 
                                 % (min(codept_map.keys()), max(codept_map.keys())))
             rv.append('')
-            rv.append('    bboxes = %r' % bboxes)
+            rv.append('    @staticmethod')
+            rv.append('    def lookup(cp):')
+            rv.append('        # lookup glyph data for a single codepoint, or return None')
             rv.append('')
-            rv.append('    code_points = [')
+            rv.append('        bboxes = %r' % bboxes)
+            rv.append('')
+            rv.append('        code_points = [')
             for rng in allow_gaps(list2range(codept_map.keys())):
                 hh = '(range(%d, %d), [%s]),' % (rng.start, rng.stop,
                         ', '.join(str(codept_map.get(i, 0)) for i in rng))
@@ -306,14 +308,26 @@ class Mangler:
                     hh += '  # ' + ' '.join(chr(i) for i in rng if codept_map.get(i, 0))
 
                 rv.append(hh)
-            rv.append('    ]')
+            rv.append('         ]')
             rv.append('')
 
             out = wrap_big_lines(rv)
 
-            out.append('    bitmaps = b"""\\')
+            out.append('        bitmaps = b"""\\')
             out.extend(wrapped_byte_literal(bitmaps))
-            out.append('"""')
+            out.append('''"""
+        for r,d in code_points:
+            if cp not in r: continue
+            ptr = d[cp-r.start]
+            if not ptr: return None
+
+            x,y, w,h, dlen = bboxes[bitmaps[ptr]]
+            bits = bitmaps[ptr+1:ptr+1+dlen]
+
+            return GlyphInfo(x,y, w,h, bits)
+
+        return None
+''')
 
         if not is_python:
             # output C Code
@@ -413,12 +427,13 @@ MINIMAL_TECH = ' µ ± × \u221a'
 @click.option('--charset', default='7min', type=click.Choice(['8bit', '7tech', '7min', 'all']),
                                      help='Limit codepoints encoded')
 @click.option('--py-code/--no-py-code', default=True, help='Make python')
+@click.option('--portable', default=False, help='Make micropython/python portable version')
 @click.option('--c-code/--no-c-code', default=True, help='Make C code')
 @click.option('--rotate/--no-rotate', default=False, help='Turn bitmap 90 degrees')
 @click.option('--py-out', default='gen/fonts.py', help='Output file for python code')
 @click.option('--c-out', default='gen/fonts.c', help='Output file for C code')
 @click.option('--selftest', is_flag=True, help='Compile C and compare to python outputs')
-def build_all(charset, py_code, c_code, rotate, py_out, c_out, selftest=0):
+def build_all(charset, py_code, c_code, rotate, py_out, c_out, portable, selftest=0):
     if charset == 'all':
         rng = None
     elif charset == '8bit':
@@ -448,7 +463,7 @@ def build_all(charset, py_code, c_code, rotate, py_out, c_out, selftest=0):
             lines.append("#   '%s' => Font%s" % (fname, name.title()))
         lines.append("#")
         lines.append("__all__ = [%s]" % ', '.join('"Font%s"' % i.title() for i in font_files))
-        lines.append(open('template.py').read())
+        lines.append(open('template.py' if portable else 'template-mpy.py').read())
  
         for name in font_files:
             lines.extend(fonts[name].encode(name, is_python=1))
