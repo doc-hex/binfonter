@@ -238,7 +238,8 @@ class Mangler:
         if limited_range:
             missing = set(limited_range) - set(data.keys())
             if missing:
-                print('  Missing but expected: ' + '  '.join(chr(i) for i in missing))
+                #print('  Missing but expected: ' + '  '.join(chr(i) for i in missing))
+                print('  %d missing but expected.' % len(missing))
 
         print('  %s are too wide: %s' % (len(too_wide),
                                                 ' '.join(chr(i) for i in sorted(too_wide))))
