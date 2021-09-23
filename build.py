@@ -16,7 +16,7 @@ assert sys.version_info.minor >= 5
 
 # TODO: make a true config file, or something
 try:
-    from config import font_files
+    from config import font_files, special_chars
 except ImportError:
     font_files = {
     #    'fixed': 'assets/6x10.bdf',        # BUGS
@@ -24,6 +24,7 @@ except ImportError:
         'bold': 'assets/helvB08.bdf',
     #    'title': 'assets/helvB10.bdf'      # BUGS
     }
+    special_chars = {}
 
 
 # Based on http://code.activestate.com/recipes/496682
@@ -184,7 +185,7 @@ def wrapped_byte_literal(bits):
 
 
 class Mangler:
-    def __init__(self, fn = 'ucs/100dpi/helvB08.bdf', output_name='font', limited_range=None, rotate=False):
+    def __init__(self, fn = 'ucs/100dpi/helvB08.bdf', output_name='font', limited_range=None, rotate=False, specials=None):
         self.filename = fn
         self.rotate = rotate
 
@@ -231,6 +232,37 @@ class Mangler:
 
             # convert to binary from hex
             bits = bytes.fromhex(''.join(bits))
+
+            all_bb.add( (x,y,w,h, len(bits)) )
+            data[cp] = (x,y,w,h, bits)
+
+        # override / spec individual chars
+        for cp, args, raw_data in specials:
+            cp = ord(cp)
+
+            if limited_range:
+                limited_range.add(cp)
+
+            rows = raw_data.split('\n')
+            w = max(len(r) for r in rows)
+            h = len(rows)
+            w = args.get('w', w)
+
+            bits = bytearray()
+            for y, row in enumerate(rows):
+                for pos in range(0, w, 8):
+                    bb = 0
+                    for i in range(8):
+                        bb <<= 1
+                        if pos+i < len(row):
+                            bb |= (0 if row[pos+i].isspace() else 1)
+                    bits.append(bb)
+                    #print(f'{row} => 0x{bb:02x}')
+
+            x = args.get('x', 0)
+            y = args.get('y', 0)
+
+            print(f'Special 0x{cp:x} = {chr(cp)} => w={w} h={h}')
 
             all_bb.add( (x,y,w,h, len(bits)) )
             data[cp] = (x,y,w,h, bits)
@@ -377,7 +409,6 @@ def test_generated_code(names, py_out, c_out):
     # generated code with the same data from the C code. Uses ctypes, and needs
     # a working GCC in the path.
     #
-    #
     import os, ctypes
 
     # compile the C
@@ -420,14 +451,14 @@ USEFUL_TECH = \
  ' ± × ∞ ≤ ≥ ⋅ ㎐ ㎑ ㎑ ㎒ ㎒ ㎓ ㎔ µ → ➡︎ ← ⬅︎ ↑ ⬆︎ ↓ ⬇︎ ↔︎ ⬌ ↕︎ ⬍ ↩︎ ▶︎ ◀︎ ▼ ▲ '
 
 # minimal tech chars
-MINIMAL_TECH = ' µ ± × \u221a'
+#MINIMAL_TECH = ' µ ± × √'
         
 
 @cli.command('build')
 @click.option('--charset', default='7min', type=click.Choice(['8bit', '7tech', '7min', 'all']),
                                      help='Limit codepoints encoded')
 @click.option('--py-code/--no-py-code', default=True, help='Make python')
-@click.option('--portable', default=False, help='Make micropython/python portable version')
+@click.option('--portable', is_flag=True, help='Make micropython/python portable version')
 @click.option('--c-code/--no-c-code', default=True, help='Make C code')
 @click.option('--rotate/--no-rotate', default=False, help='Turn bitmap 90 degrees')
 @click.option('--py-out', default='gen/fonts.py', help='Output file for python code')
@@ -437,17 +468,17 @@ def build_all(charset, py_code, c_code, rotate, py_out, c_out, portable, selftes
     if charset == 'all':
         rng = None
     elif charset == '8bit':
-        rng = range(0,256)
+        rng = set(range(0,256))
     elif charset == '7tech':
-        rng = frozenset(list(range(32,127)) + [ord(i) for i in USEFUL_TECH if i != ' '])
+        rng = set(list(range(32,127)) + [ord(i) for i in USEFUL_TECH if i != ' '])
     elif charset == '7min':
-        rng = frozenset(list(range(32,127)) + [ord(i) for i in MINIMAL_TECH if i != ' '])
+        rng = set(list(range(32,127)))
 
     assert py_code or c_code
 
     fonts = {}
     for name in font_files:
-        fonts[name] = Mangler(font_files[name], name, limited_range=rng, rotate=rotate)
+        fonts[name] = Mangler(font_files[name], name, limited_range=rng, rotate=rotate, specials=special_chars.get(name, []))
 
     if py_code:
         lines = []

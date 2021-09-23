@@ -17,7 +17,7 @@ import io, os, sys
 #    assets/8x13.bdf     <-- nice, but big
 #
 #def doit(fn = 'assets/6x10.bdf', screen_size=(128, 32)):
-def doit(fn = 'assets/zevv-peep-iso8859-15-10x20.bdf', screen_size=(128, 32)):
+def doit(fn = 'assets/zevv-peep-iso8859-15-10x20.bdf', screen_size=(128, 64)):
 
     # lifted from pilfont.py helper script
     from PIL import BdfFontFile
