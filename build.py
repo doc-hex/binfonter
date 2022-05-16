@@ -185,7 +185,7 @@ def wrapped_byte_literal(bits):
 
 
 class Mangler:
-    def __init__(self, fn = 'ucs/100dpi/helvB08.bdf', output_name='font', limited_range=None, rotate=False, specials=None):
+    def __init__(self, fn = 'ucs/100dpi/helvB08.bdf', output_name='font', limited_range=None, rotate=False, specials=None, portable=True):
         self.filename = fn
         self.rotate = rotate
 
@@ -194,6 +194,7 @@ class Mangler:
         print("For font: %s ... called '%s' in output" % (fn, output_name))
         if limited_range:
             print("  Restricted to: %d chars (%d max)" % (len(limited_range), max(limited_range)))
+            limited_range = set(limited_range)
         print("  Number of codepoints: %d" % len(font.codepoints()))
 
         decompositions = glyph_combining.build_unicode_decompositions()
@@ -325,13 +326,19 @@ class Mangler:
             rv.append('    code_range = range(%d, %d)' 
                                 % (min(codept_map.keys()), max(codept_map.keys())))
             rv.append('')
-            rv.append('    @staticmethod')
-            rv.append('    def lookup(cp):')
-            rv.append('        # lookup glyph data for a single codepoint, or return None')
-            rv.append('')
-            rv.append('        bboxes = %r' % bboxes)
-            rv.append('')
-            rv.append('        code_points = [')
+            if portable:
+                rv.append('    @staticmethod')
+                rv.append('    def lookup(cp):')
+                rv.append('        # lookup glyph data for a single codepoint, or return None')
+                rv.append('')
+                rv.append('        bboxes = %r' % bboxes)
+                rv.append('')
+                rv.append('        code_points = [')
+            else:
+                rv.append('    _bboxes = %r' % bboxes)
+                rv.append('')
+                rv.append('    _code_points = [')
+
             for rng in allow_gaps(list2range(codept_map.keys())):
                 hh = '(range(%d, %d), [%s]),' % (rng.start, rng.stop,
                         ', '.join(str(codept_map.get(i, 0)) for i in rng))
@@ -345,9 +352,14 @@ class Mangler:
 
             out = wrap_big_lines(rv)
 
-            out.append('        bitmaps = b"""\\')
-            out.extend(wrapped_byte_literal(bitmaps))
-            out.append('''"""
+            if not portable:
+                out.append('    _bitmaps = b"""\\')
+                out.extend(wrapped_byte_literal(bitmaps))
+                out.append('"""\n\n')
+            else:
+                out.append('        bitmaps = b"""\\')
+                out.extend(wrapped_byte_literal(bitmaps))
+                out.append('''"""
         for r,d in code_points:
             if cp not in r: continue
             ptr = d[cp-r.start]
@@ -468,11 +480,11 @@ def build_all(charset, py_code, c_code, rotate, py_out, c_out, portable, selftes
     if charset == 'all':
         rng = None
     elif charset == '8bit':
-        rng = set(range(0,256))
+        rng = frozenset(range(0,256))
     elif charset == '7tech':
-        rng = set(list(range(32,127)) + [ord(i) for i in USEFUL_TECH if i != ' '])
+        rng = frozenset(list(range(32,127)) + [ord(i) for i in USEFUL_TECH if i != ' '])
     elif charset == '7min':
-        rng = set(list(range(32,127)))
+        rng = frozenset(range(32,127))
 
     assert py_code or c_code
 
@@ -486,7 +498,7 @@ def build_all(charset, py_code, c_code, rotate, py_out, c_out, portable, selftes
         lines.append("#")
         lines.append("# cmdline: " + ' '.join(sys.argv))
         lines.append("#")
-        if rng and len(rng) < 200:
+        if rng and max(rng) > 128:
             lines.append("# special chars (if present):")
             lines.append("#  %s" % '  '.join(chr(i) for i in rng if i > 128))
             lines.append("#")
@@ -497,7 +509,7 @@ def build_all(charset, py_code, c_code, rotate, py_out, c_out, portable, selftes
         lines.append(open('template.py' if portable else 'template-mpy.py').read())
  
         for name in font_files:
-            lines.extend(fonts[name].encode(name, is_python=1))
+            lines.extend(fonts[name].encode(name, is_python=1, portable=portable))
 
         with open(py_out, 'wt') as fd:
             fd.write('\n'.join(lines) + '\n')
